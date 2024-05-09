@@ -13,10 +13,10 @@ from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 from model.vpsnet_learned_malisat import VPSNetLearnedMalisat
 from src.model.vpsnet_learned_malisat_radiometric import VPSNetLearnedMalisatRadiometric
-from src.dataset.SEN2VENUS_v2 import SEN2VENUSDataset
+from dataset.SEN2VENUS import SEN2VENUSDataset
 
 from src.dataset.worldview import WorldView3Dataset
-from src.dataset.pelican_v2 import PelicanDataset
+from dataset.pelican import PelicanDataset
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 import numpy as np

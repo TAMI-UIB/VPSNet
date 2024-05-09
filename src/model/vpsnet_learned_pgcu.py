@@ -11,8 +11,8 @@ import sys
 sys.path.extend(["/home/marctomas/Escritorio/Repositoris/E2EPansharpening"])
 
 from src.postprocessing import dict_post
-from src.utils.PGCU import PGCU, DownSamplingBlock
-from src.utils.proxnet import ProxNet
+from upsampling.PGCU import PGCU, DownSamplingBlock
+from model.proxnet import ProxNet
 from src.utils.resnet import SpectralResNet, ResNet
 
 class VPSNetLearnedPGCU(nn.Module):

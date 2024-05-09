@@ -11,8 +11,8 @@ import sys
 sys.path.extend(["/home/marctomas/Escritorio/Repositoris/E2EPansharpening"])
 
 from src.postprocessing import dict_post
-from src.utils.upsamplings import UpSamp_4_2, UpsamplingConv, DownsamplingConv, Downsampling
-from src.utils.proxnet import ProxNet
+from upsampling.upsamplings import UpSamp_4_2, UpsamplingConv, DownsamplingConv, Downsampling
+from model.proxnet import ProxNet
 from src.utils.losses import RadiometricLoss
 
 class VPSNetLearned(nn.Module):

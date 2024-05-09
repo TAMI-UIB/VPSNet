@@ -1,98 +1,69 @@
 import os
-import math
+import sys
+import dotenv
+dotenv.load_dotenv()
+sys.path.extend([os.environ.get('PROJECT_PATH')])
+from h5py import File
+from typing import Literal
 import torch
 import imageio
-import numpy as np
-import torch.nn.functional as F
+
 from torch.utils.data import Dataset
-import torchvision
+
+from upsampling.upsamplings import Upsampling, Downsampling, GaussianSmoothing
+
 
 class PelicanDataset(Dataset):
-    def __init__(self, path_to_images, crop_size, sampling_factor, kernel_size, std, noise_level = None, flag_training = False, flag_augmentation = False):
+
+    IMAGES_TEST_IDX = [6, 11, 12, 14, 20, 22, 24, 26, 27, 37]
+
+    def __init__(self, path_to_dataset: str | os.PathLike, dataset_mode: Literal['train', 'validation', 'test'], sampling_factor = 4, noise_level = None):
         super().__init__()
 
-        self.path = path_to_images
-        self.training = flag_training
-        self.augmentation = flag_augmentation
+        self.path = os.path.join(path_to_dataset, "Pelican", "pelican_64.h5")
         self.noise_level = noise_level
 
-        self.stmichel1 = self.__read_image(self.path + "stmichel2.tif")
-        self.stmichel2 = self.__read_image(self.path + "stmichel.tif")
+        self.dataset = File(self.path)
 
-        self.image_size = self.stmichel1.shape[-1]
-        self.n_channels = self.stmichel1.shape[-3]
-        self.crop_size = crop_size
+        self.sampling_factor = sampling_factor
 
-        self.images_training = math.floor(2*(self.image_size/self.crop_size)**2*0.8)
+        self.upsampling = Upsampling(4, self.sampling_factor)
+        self.downsampling = Downsampling(4, self.sampling_factor)
+        self.conv = GaussianSmoothing(4, 9, 1.7)
 
-        self.crops_per_image = self.image_size // self.crop_size  #TODO: Refactor this variable
-
-        self.gaussian_kernel = self.__generate_gaussian_kernel(kernel_size, std, self.n_channels)
-
-        self.gaussian_convolution = torchvision.transforms.Lambda(lambda x: F.conv2d(x, self.gaussian_kernel, padding='same', groups = self.n_channels))
-
-        self.upsampling = torchvision.transforms.Resize(size=crop_size, interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
-        self.downsampling = torchvision.transforms.Resize(size=crop_size//sampling_factor, interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
-
-        # Composed transformations
-        self.DB = torchvision.transforms.Compose([self.gaussian_convolution, self.downsampling])
-        self.DBtranspose = torchvision.transforms.Compose([self.upsampling, self.gaussian_convolution])
-        
-        
+        self.gt_images = self.dataset[dataset_mode]
 
     def __getitem__(self, idx):
-        if self.training:
 
-            if idx < self.crops_per_image**2:
-                reference = self.stmichel1 / 255
-
-            else:
-                idx = idx - self.crops_per_image**2
-                reference = self.stmichel2 / 255
-        
-        else:
-            idx = idx + (self.images_training - self.crops_per_image**2) # imagenes en training - imagenes en stmichel1
-            reference = self.stmichel2
-
-        column = idx % self.crops_per_image
-        row = idx // self.crops_per_image
-
-        gt = reference[:, row*self.crop_size:(row+1)*self.crop_size, column*self.crop_size:(column+1)*self.crop_size]
+        gt = torch.from_numpy(self.gt_images[idx]).permute((2,1,0)) / 255
 
         ms = self.__make_ms(gt)
-        u_tilde = self.__make_u_tilde(gt)
-        pan = self.__make_pan(gt)
-        p_tilde = self.__make_p_tilde(pan)
+        lms = self.upsampling(ms.unsqueeze(0)).squeeze(0)
+        pan = torch.mean(gt, dim=-3)
 
-        return gt, ms, u_tilde, pan
-        
+        return gt, ms, lms, pan.unsqueeze(0)
+    
+    @staticmethod
+    def get_name():
+        return 'pelican'
+    
     def __len__(self):
-        return math.floor(2*(self.image_size/self.crop_size)**2*0.8) if self.training else math.ceil(2*(self.image_size/self.crop_size)**2*0.2)
-    
-    def __make_pan(self, gt):
-        pan = torch.sum(gt, dim = 0) / gt.shape[0]
-        pan = pan.repeat(self.n_channels, 1, 1)
-        return pan
-    
+        return len(self.gt_images)
+
     def __make_ms(self, gt):
-        ms = self.DB(gt)
+        ms = self.downsampling(self.conv(gt).unsqueeze(0)).squeeze(0)
 
         if self.noise_level is not None:
             ms += torch.normal(0, self.noise_level, size= list(ms.shape))
         
         return ms
     
-    def get_n_channels(self):
+    @staticmethod
+    def get_n_channels():
         return 4
-
-    def __make_p_tilde(self, pan):
-        p_tilde = self.DBtranspose(self.DB(pan))
-        return p_tilde
     
-    def __make_u_tilde(self, gt):
-        u_tilde = self.DBtranspose(self.DB(gt))
-
-        return u_tilde
+    def get_sampling_factor(self):
+        return self.sampling_factor
 
     def __read_image(self, path):
         image_np = imageio.imread(path) / 255
@@ -103,70 +74,16 @@ class PelicanDataset(Dataset):
     def show_dataset_image(img):
         return img[..., [0,1,2], :, :]
     
-    def __generate_gaussian_kernel(self, kernel_size, sigma, channels):
-
-        # Create a x, y coordinate grid of shape (kernel_size, kernel_size, 2)
-        x_cord = torch.arange(kernel_size)
-        x_grid = x_cord.repeat(kernel_size).view(kernel_size, kernel_size)
-        y_grid = x_grid.t()
-        xy_grid = torch.stack([x_grid, y_grid], dim=-1)
-
-        mean = (kernel_size - 1)/2.
-        variance = sigma**2.
-
-        # Calculate the 2-dimensional gaussian kernel which is
-        # the product of two gaussian distributions for two different
-        # variables (in this case called x and y)
-        gaussian_kernel = (1./(2.*math.pi*variance)) *\
-                        torch.exp(
-                            -torch.sum((xy_grid - mean)**2., dim=-1) /\
-                            (2*variance)
-                        )
-        # Make sure sum of values in gaussian kernel equals 1.
-        gaussian_kernel = gaussian_kernel / torch.sum(gaussian_kernel)
-
-        # Reshape to 2d depthwise convolutional weight
-        gaussian_kernel = gaussian_kernel.view(1, 1, kernel_size, kernel_size)
-        gaussian_kernel = gaussian_kernel.repeat(channels, 1, 1, 1)
-
-        return gaussian_kernel
-
-
 if __name__ == '__main__':
-    std = 1.7
-    kernel_size = 4 * math.ceil(std) +1
+    dataset_train = PelicanDataset("/home/marctomas/Escritorio/datasets", 'train', 4, None)
+    dataset_validation = PelicanDataset("/home/marctomas/Escritorio/datasets", 'validation', 4, None)
+    dataset_test = PelicanDataset("/home/marctomas/Escritorio/datasets", 'test', 4, None)
 
-    dataset_train = PelicanDataset("/lhome/ext/uib107/uib107c/datasets/Pelican/", 32, 4, kernel_size, std, None, True, False)
-    dataset_val = PelicanDataset("/lhome/ext/uib107/uib107c/datasets/Pelican/", 32, 4, kernel_size, std, None, False, False)
+    print(
+        f"Training samples: {len(dataset_train)}\n" \
+        f"Validation samples: {len(dataset_validation)}\n" \
+        f"Test samples: {len(dataset_test)}\n" 
+    )
 
-    gt, pan, ms, p_tilde, u_tilde = dataset_train[5]
-
-    imageio.imwrite("images/gt.tif", gt.permute((2,1,0)).detach().numpy()*255)
-    imageio.imwrite("images/pan.tif", pan.permute((2,1,0)).detach().numpy()*255)
-    imageio.imwrite("images/ms.tif", ms.permute((2,1,0)).detach().numpy()*255)
-    imageio.imwrite("images/p_tilde.tif", p_tilde.permute((2,1,0)).detach().numpy()*255)
-    imageio.imwrite("images/u_tilde.tif", u_tilde.permute((2,1,0)).detach().numpy()*255)
-
-    test_image = dataset_train.gaussian_convolution(gt)
-    imageio.imwrite("images/test.tif", test_image.permute((2,1,0)).detach().numpy()*255)
-
-    # print("Crops:", dataset_train.crops_per_image**2)
-
-    # print("Length training:", len(dataset_train))
-    # print("Length validation:", len(dataset_val))
-
-    # print("Asserting training dataset")
-
-    # for i in range(len(dataset_train)):
-    #     gt, pan, ms, p_tilde, u_tilde = dataset_train[i]
-    #     print("Index:", i)
-
-    # print()
-    # print("Asserting validation dataset")
-
-    # for i in range(len(dataset_val)):
-    #     gt, pan, ms, p_tilde, u_tilde = dataset_val[i]
-    #     print("Index:", i)
-        
 
     

@@ -11,8 +11,8 @@ from torch import Tensor
 import sys
 sys.path.extend(["/home/marctomas/Escritorio/Repositoris/E2EPansharpening"])
 
-from src.utils.upsamplings import Upsampling, Downsampling, GaussianSmoothing
-from src.utils.proxnet import ProxNet
+from upsampling.upsamplings import Upsampling, Downsampling, GaussianSmoothing
+from model.proxnet import ProxNet
 from src.utils.losses import RadiometricLoss
 
 class VPSNet(nn.Module):

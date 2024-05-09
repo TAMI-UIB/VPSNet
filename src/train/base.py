@@ -37,10 +37,8 @@ class Experiment:
 
         self.dataset = dict_datasets[dataset]
 
-        try:
-            self.model = dict_model[model]
-        except KeyError:
-            self.model = dict_sota[model]
+        self.model = dict_model[model]
+
 
         self.loss_function = loss_function
 

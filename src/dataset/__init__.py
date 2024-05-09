@@ -1,5 +1,5 @@
-from .SEN2VENUS_v2 import SEN2VENUSDataset
-from .pelican_v2 import PelicanDataset
+from .SEN2VENUS import SEN2VENUSDataset
+from .pelican import PelicanDataset
 from .worldview import WorldView3Dataset
 
 dict_datasets = {
