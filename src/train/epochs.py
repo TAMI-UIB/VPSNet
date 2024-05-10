@@ -30,7 +30,6 @@ def training_epoch(
     losses = []
     model.train()
     with tqdm(enumerate(train_loader), total=len(train_loader), leave=False) as pbar:
-        #with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
         for _, batch in pbar:
         
             # New batch entering
@@ -39,18 +38,16 @@ def training_epoch(
 
             # Loading data to device
             if device == torch.device('cuda'):
-                gt = gt.cuda(non_blocking=True).float()  # ground truth
-                ms = ms.cuda(non_blocking=True).float()  # multi-spectral in low resolution
-                lms = lms.cuda(non_blocking=True).float()  # upsampled multi-spectral
-                pan = pan.cuda(non_blocking=True).float()  # panchromatic
+                gt = gt.cuda().float()  # ground truth
+                ms = ms.cuda().float()  # multi-spectral in low resolution
+                lms = lms.cuda().float()  # upsampled multi-spectral
+                pan = pan.cuda().float()  # panchromatic
             else:
                 gt = gt.to(device).float()  # ground truth
                 ms = ms.to(device).float()  # multi-spectral in low resolution
                 lms = lms.to(device).float()  # upsampled multi-spectral
                 pan = pan.to(device).float()  # panchromatic
 
-            # with record_function('forward_pass'):
-                # Computing the prediction
             if isinstance(model, VPSNetLearnedMalisatRadiometric):
 
                 if kwargs.get('metrics_per_stage', False):
@@ -66,10 +63,6 @@ def training_epoch(
                 else:
                     pred = model.forward(ms, lms, pan)
 
-                # Computing loss function
-                # if isinstance(loss_f, RadiometricMSELoss) or isinstance(loss_f, RadiometricL1Loss):
-                #     loss = loss_f(pred, pan, model.get_p_tilde(pan.repeat(1,gt.shape[1], 1, 1)), lms, gt)
-                
                 if kwargs.get('metrics_per_stage', False):
                     loss = loss_f(pred, stages, gt)
                 else:
@@ -90,8 +83,6 @@ def training_epoch(
             # Computing metrics
             metrics.update(pred.cpu(), gt.cpu(), lms.cpu())
             
-        #prof.export_chrome_trace('./trace_epoch.json')
-
     return np.array(losses).mean(), metrics.dict
 
 
@@ -104,8 +95,6 @@ def validating_epoch(
         epoch: int,
         **kwargs
     ) -> Tuple[Any, ...]:
-
-    # os.mkdir(f"images/{epoch}/")
 
     if kwargs.get('metrics_per_stage', False):
         loss_f.alpha_stage = kwargs.get('stages_parameter', 1.0)
@@ -121,10 +110,10 @@ def validating_epoch(
 
                 # Loading data to device
                 if device == torch.device('cuda'):
-                    gt = gt.cuda(non_blocking=True).float()  # ground truth
-                    ms = ms.cuda(non_blocking=True).float()  # multi-spectral in low resolution
-                    lms = lms.cuda(non_blocking=True).float()  # upsampled multi-spectral
-                    pan = pan.cuda(non_blocking=True).float()  # panchromatic
+                    gt = gt.cuda().float()  # ground truth
+                    ms = ms.cuda().float()  # multi-spectral in low resolution
+                    lms = lms.cuda().float()  # upsampled multi-spectral
+                    pan = pan.cuda().float()  # panchromatic
                 else:
                     gt = gt.to(device).float()  # ground truth
                     ms = ms.to(device).float()  # multi-spectral in low resolution
@@ -146,10 +135,6 @@ def validating_epoch(
                         pred, stages = model.forward(ms, lms, pan)
                     else:
                         pred = model.forward(ms, lms, pan)
-
-                    # Computing loss function
-                    # if isinstance(loss_f, RadiometricMSELoss) or isinstance(loss_f, RadiometricL1Loss):
-                    #     loss = loss_f(pred, pan, model.get_p_tilde(pan.repeat(1,gt.shape[1], 1, 1)), lms, gt)
                     
                     if kwargs.get('metrics_per_stage', False):
                         loss = loss_f(pred, stages, gt)
@@ -158,15 +143,6 @@ def validating_epoch(
 
                 # Saving results
                 loss = loss.float()
-
-                # if isinstance(model, VPSNet) and loss > 0.01 and epoch >= 50 and error <= 5:
-                #     imageio.imwrite(f"images/{epoch}/gt_{epoch}_{error}.tif", gt.squeeze(0).cpu().permute((2,1,0)).detach().numpy())
-                #     imageio.imwrite(f"images/{epoch}/ms_{epoch}_{error}.tif", ms.squeeze(0).cpu().permute((2,1,0)).detach().numpy())
-                #     imageio.imwrite(f"images/{epoch}/lms_{epoch}_{error}.tif", lms.squeeze(0).cpu().permute((2,1,0)).detach().numpy())
-                #     imageio.imwrite(f"images/{epoch}/pan_{epoch}_{error}.tif", pan.squeeze(0).cpu().permute((2,1,0)).detach().numpy())
-                #     imageio.imwrite(f"images/{epoch}/result_{epoch}_{error}.tif", pred.squeeze(0).cpu().permute((2,1,0)).detach().numpy())
-
-                #     error += 1
 
                 losses.append(loss.cpu().detach().numpy())
                 pbar.set_description(
