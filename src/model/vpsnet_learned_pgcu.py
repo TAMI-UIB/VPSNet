@@ -7,8 +7,12 @@ import numpy as np
 
 from torch import Tensor
 
+from dotenv import load_dotenv
+load_dotenv()
+
+import os
 import sys
-sys.path.extend(["/home/marctomas/Escritorio/Repositoris/E2EPansharpening"])
+sys.path.extend([os.environ.get('PROJECT_PATH')])
 
 from src.postprocessing import dict_post
 from upsampling.PGCU import PGCU, DownSamplingBlock

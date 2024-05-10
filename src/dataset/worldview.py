@@ -11,7 +11,7 @@ dotenv.load_dotenv()
 sys.path.extend([os.environ.get('PROJECT_PATH')])
 
 
-from upsampling.upsamplings import Upsampling, Downsampling, GaussianSmoothing
+from upsampling.bicubic import Upsampling, Downsampling, GaussianSmoothing
 
 from typing import Literal, Tuple
 

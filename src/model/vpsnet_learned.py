@@ -7,12 +7,16 @@ import numpy as np
 
 from torch import Tensor
 
+from dotenv import load_dotenv
+load_dotenv()
+
+import os
 import sys
-sys.path.extend(["/home/marctomas/Escritorio/Repositoris/E2EPansharpening"])
+sys.path.extend([os.environ.get('PROJECT_PATH')])
 
 from src.postprocessing import dict_post
-from upsampling.upsamplings import UpSamp_4_2, UpsamplingConv, DownsamplingConv, Downsampling
-from model.proxnet import ProxNet
+from src.upsampling.mhfnet import UpSamp_4_2, UpsamplingConv, DownsamplingConv, Downsampling
+from src.model.proxnet import ProxNet
 from src.utils.losses import RadiometricLoss
 
 class VPSNetLearned(nn.Module):

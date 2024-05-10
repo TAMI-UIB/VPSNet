@@ -23,16 +23,8 @@ from src.utils.losses import RadiometricPerStage
 from src.utils.metrics import MetricCalculator
 from src.utils.visualization import TensorboardWriter, FileWriter
 
-torch.manual_seed(2024)
-torch.cuda.manual_seed_all(2024)
-np.random.seed(2024)
-
-gc.collect()
-torch.cuda.empty_cache()
-
-
 class Experiment:
-    def __init__(self, dataset="WorldView-3", model="VPSNet", optimizer="Adam", loss_function="MSE",
+    def __init__(self, dataset="worldview", model="VPSNet", optimizer="Adam", loss_function="L1",
                  sampling_factor=4, noise_std=None, epochs=1000, hp=default_hp, **kwargs):
 
         self.dataset = dict_datasets[dataset]
@@ -50,28 +42,28 @@ class Experiment:
         self.noise_std = noise_std
         self.hp = hp
         self.kwargs = kwargs
-        device_s = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.kwargs["device"] = torch.device(device_s)
 
         self.kwargs["radiometric"] = isinstance(self.criterion, RadiometricPerStage)
-        if self.kwargs.get("histogram", None) is not None:
-            self.kwargs["histogram"] = dict_histograms.get(kwargs["histogram"], None)
+       
         self.kwargs["kernel_size"] = self.hp["kernel_size"]
         self.kwargs["std"] = self.hp["std"]
 
-        self.eval_n = max(
-            int(epochs * (self.kwargs["evaluation_frequency"] / 100)), 1)
-        seed = 0
+        self.eval_n = max(int(epochs * (self.kwargs["evaluation_frequency"] / 100)), 1)
+        seed = 2024
         torch.manual_seed(seed)
+
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
+
+        np.random.seed(seed)
+
 
     def train(self):
         # training and validation data loaders
         dataset_train = self.dataset(self.kwargs["dataset_path"], 'train', noise_level = self.noise_std)
         dataset_val = self.dataset(self.kwargs["dataset_path"], 'validation', noise_level = self.noise_std)
 
-
+        # TODO: Mover esto a la inicialización de los modelos
         if self.kwargs.get("upsampling_type", None) is not None:
             memory = 4 if isinstance(self.model, dict_model['VPSNetMemory']) else 0
             upsampling = dict_upsamplings[self.kwargs["upsampling_type"]][0](dataset_train.get_n_channels()+memory, self.sampling_factor)

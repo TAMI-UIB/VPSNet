@@ -7,11 +7,15 @@ import numpy as np
 
 from torch import Tensor
 
+from dotenv import load_dotenv
+load_dotenv()
+
+import os
 import sys
-sys.path.extend(["/home/marctomas/Escritorio/Repositoris/E2EPansharpening"])
+sys.path.extend([os.environ.get('PROJECT_PATH')])
 
 from src.postprocessing import dict_post
-from upsampling.upsamplings import UpsamplingConv, DownsamplingConv, Downsampling, UpSamp_4_2, Downsamp_4_2
+from upsampling.bicubic import UpsamplingConv, DownsamplingConv, Downsampling, UpSamp_4_2, Downsamp_4_2
 from model.proxnet import ProxNet
 from src.utils.losses import RadiometricLoss
 

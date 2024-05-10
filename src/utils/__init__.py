@@ -1,5 +1,5 @@
 from .losses import *
-from ..upsampling.upsamplings import *
+from ..upsampling.bicubic import *
 from torch.optim import Adam
 
 

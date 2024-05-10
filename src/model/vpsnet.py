@@ -8,10 +8,14 @@ import numpy as np
 from typing import Tuple, Any
 from torch import Tensor
 
-import sys
-sys.path.extend(["/home/marctomas/Escritorio/Repositoris/E2EPansharpening"])
+from dotenv import load_dotenv
+load_dotenv()
 
-from upsampling.upsamplings import Upsampling, Downsampling, GaussianSmoothing
+import os
+import sys
+sys.path.extend([os.environ.get('PROJECT_PATH')])
+
+from upsampling.bicubic import Upsampling, Downsampling, GaussianSmoothing
 from model.proxnet import ProxNet
 from src.utils.losses import RadiometricLoss
 
