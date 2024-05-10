@@ -8,7 +8,7 @@ import sys
 import dotenv
 dotenv.load_dotenv()
 sys.path.extend([os.environ.get('PROJECT_PATH')])
-from upsampling.upsamplings import Upsampling, Downsampling, GaussianSmoothing
+from upsampling.bicubic import Upsampling, Downsampling, GaussianSmoothing
 
 class SEN2VENUSDataset(Dataset):
 

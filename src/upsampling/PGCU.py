@@ -102,17 +102,3 @@ class PGCU(nn.Module):
         out = self.FineAdjust(out)
         return out
     
-
-if __name__ == '__main__':
-    downsampling = DownSamplingBlock(4, 4, 2)
-    pan = torch.ones((32, 1, 128, 128))
-    ms = torch.ones((32, 4, 32, 32))
-    lms = torch.ones((32, 4, 64, 64))
-
-    test = downsampling(lms)
-
-    PGCU = PGCU(sampling_factor=4, channel=4, vecLen=64, numberBlocks=2)
-    
-    hrms = PGCU.forward(pan, ms)
-
-    print(hrms.shape)

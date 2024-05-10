@@ -10,7 +10,7 @@ import imageio
 
 from torch.utils.data import Dataset
 
-from upsampling.upsamplings import Upsampling, Downsampling, GaussianSmoothing
+from upsampling.bicubic import Upsampling, Downsampling, GaussianSmoothing
 
 
 class PelicanDataset(Dataset):
