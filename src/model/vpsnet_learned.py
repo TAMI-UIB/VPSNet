@@ -15,6 +15,7 @@ import sys
 sys.path.extend([os.environ.get('PROJECT_PATH')])
 
 from src.postprocessing import dict_post
+from src.upsampling import dict_upsamplings
 from src.upsampling.mhfnet import UpSamp_4_2, UpsamplingConv, DownsamplingConv, Downsampling
 from src.model.proxnet import ProxNet
 from src.utils.losses import RadiometricLoss
@@ -26,6 +27,7 @@ class VPSNetLearned(nn.Module):
 
         # Model parameters
         self.n_channels = n_channels
+        self.sampling_factor = sampling_factor
         self.n_iters = kwargs["stages"]
         self.kernel_size = kwargs["kernel_size"]
         self.std = kwargs["std"]
@@ -42,8 +44,10 @@ class VPSNetLearned(nn.Module):
         # Inicialization of operators
         self.blurr = DobleConv(self.n_channels, kwargs.get("n_features", 32), self.n_channels)
 
-        self.upsampling = kwargs["upsamplings"][0]
-        self.downsampling = kwargs["upsamplings"][1]
+        # Up/Downsampling parsing
+        self.upsampling_type = kwargs.get('upsampling_type', "bicubic")
+
+        self.upsampling, self.downsampling = self.init_upsampling()
 
         self.downsampling_2 = Downsampling(self.n_channels, 2)
         
@@ -86,7 +90,6 @@ class VPSNetLearned(nn.Module):
         u_tilde = self.BU(ms)
 
         P_tilde = self.get_p_tilde(P)
-        P_tilde_u = self.get_p_tilde_u(u_tilde).repeat(1, self.n_channels, 1, 1)
 
         u = lms.clone()
         p = lms.clone()
@@ -98,13 +101,11 @@ class VPSNetLearned(nn.Module):
 
             u_anterior = u.clone()
 
-            p = p + self.gamma*u_barra - self.gamma * \
-                self.proxnet(p/self.gamma+u_barra)
+            p = p + self.gamma*u_barra - self.gamma * self.proxnet(p/self.gamma+u_barra)
             
             q = (q + self.gamma*(self.DB(u_barra)-f))/(1 + self.gamma/self.mu)
 
-            u = (u - self.tau*(p + self.BU(q) - self.lmb*P_tilde*P*u_tilde)) / \
-                (1+self.tau*self.lmb*torch.square(P_tilde))
+            u = (u - self.tau*(p + self.BU(q) - self.lmb*P_tilde*P*u_tilde)) / (1+self.tau*self.lmb*torch.square(P_tilde))
 
             u_barra = 2*u-u_anterior
             
@@ -141,11 +142,17 @@ class VPSNetLearned(nn.Module):
             post_model = dict_post[self.postprocessing_type](self.n_channels, n_features=32, reduction = 4, preprocessing = self.use_features)
 
         return post_model
+    
+    def init_upsampling(self) -> nn.Module:
+        
+        upsampling = dict_upsamplings[self.upsampling_type][0](self.n_channels, self.sampling_factor)
+        downsampling = dict_upsamplings[self.upsampling_type][1](self.n_channels, self.sampling_factor)
+
+        return upsampling, downsampling
         
     
     def upsampling_support(self, u: Tensor, pan_full: Tensor, pan_d2: Tensor) -> Tensor:
         u_up = self.upsampling(u, pan_d2, pan_full)
-        
         return self.blurr(u_up)
 
     def get_info_model(self):

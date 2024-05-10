@@ -63,33 +63,23 @@ class Experiment:
         dataset_train = self.dataset(self.kwargs["dataset_path"], 'train', noise_level = self.noise_std)
         dataset_val = self.dataset(self.kwargs["dataset_path"], 'validation', noise_level = self.noise_std)
 
-        # TODO: Mover esto a la inicialización de los modelos
-        if self.kwargs.get("upsampling_type", None) is not None:
-            memory = 4 if isinstance(self.model, dict_model['VPSNetMemory']) else 0
-            upsampling = dict_upsamplings[self.kwargs["upsampling_type"]][0](dataset_train.get_n_channels()+memory, self.sampling_factor)
-            downsampling = dict_upsamplings[self.kwargs["upsampling_type"]][1](dataset_train.get_n_channels()+memory, self.sampling_factor)
-            self.kwargs["upsamplings"] = [upsampling, downsampling]
-
         print(f"Batch size: {self.kwargs['batch_size']}")
 
+        # Limiting the size of the dataset
         if self.kwargs.get("limit_dataset") is None:
-            train_loader = DataLoader(
-                dataset_train, batch_size=self.kwargs['batch_size'], shuffle=True, num_workers=self.kwargs["num_workers"], pin_memory=True)
-            val_loader = DataLoader(dataset_val, batch_size=1, shuffle=True,
-                                num_workers=self.kwargs["num_workers"], pin_memory=True)
+            train_loader = DataLoader(dataset_train, batch_size=self.kwargs['batch_size'], shuffle=True, num_workers=self.kwargs["num_workers"], pin_memory=True)
+            val_loader = DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=self.kwargs["num_workers"], pin_memory=True)
         else:
             train_loader = self.limit_dataset(dataset_train)
-            val_loader = self.limit_dataset(dataset_val, validation=True)
+            val_loader = self.limit_dataset(dataset_val, validation=True)   
 
-        
-
+        # Resuming from checkpoint if it is indicated
         if self.kwargs["resume_path"] is not None:
 
             ckpt = torch.load(
                 self.kwargs["resume_path"], map_location=torch.device(self.kwargs["device"]))
             model = ckpt['model']
             
-
             if 'epoch' in ckpt.keys():
                 start_epoch = ckpt['epoch']+1
             else:
@@ -108,51 +98,36 @@ class Experiment:
 
         print(f"Devices:{next(model.parameters()).device}")
         
-        scheduler_setting = self.kwargs.get("scheduler", None)
-
-        if scheduler_setting == "halved_100":
-            scheduler = StepLR(self.optimizer, step_size=100, gamma=0.5)
-
-        elif scheduler_setting == "halved_500":
-            scheduler = StepLR(self.optimizer, step_size=500, gamma=0.5)
-
-        elif scheduler_setting == "halved_20":
-            scheduler = StepLR(self.optimizer, step_size=20, gamma=0.5)
-
-        elif scheduler_setting == "almost_same":
-            scheduler = StepLR(self.optimizer, step_size=4, gamma=0.99)
-
-        elif scheduler_setting == "halved_200":
-            scheduler = StepLR(self.optimizer, step_size=200, gamma=0.5)
-
-        elif scheduler_setting == "halved_only_200":
-            scheduler = MultiStepLR(self.optimizer, milestones=[200], gamma=0.5)
-
-        elif scheduler_setting == "halved_only_1400":
-            scheduler = MultiStepLR(self.optimizer, milestones=[1400], gamma=0.5)
-
-        else:
-            scheduler = None
+        scheduler = StepLR(self.optimizer, step_size=500, gamma=0.5)
 
         # create summary writer if tensorboard_logdir is not None
         writer = TensorboardWriter(val_loader, train_loader, model, self.kwargs["device"], self.kwargs["log_path"], self.kwargs["nickname"], self.noise_std)
 
         writer.add_text("Model info", self.get_info_model(model, dataset_train), step=None)
 
-        # Initialization of bounding losses
         best_psnr = 0.001
 
         for epoch in range(start_epoch, self.epochs, 1):
-            train_metrics = MetricCalculator(len(dataset_train))
-            val_metrics = MetricCalculator(len(dataset_val))
+
+            # Initializing metrics tracker
+            # TODO: Considerar el caso de limit dataset
+            dataset_length_train = self.kwargs.get("limit_dataset", len(dataset_train))
+            dataset_length_validation = math.ceil(self.kwargs.get("limit_dataset")/8) if self.kwargs.get("limit_dataset", None) is not None else len(dataset_val)
+
+            train_metrics = MetricCalculator(dataset_length_train)
+            val_metrics = MetricCalculator(dataset_length_validation)
+
+            # Training epoch
             train_loss, train_metrics = training_epoch(
                 model, train_loader, self.optimizer, self.criterion, train_metrics, self.kwargs["device"], epoch, metrics_per_stage = self.kwargs.get('metrics_per_stage', False), stages_parameter = self.kwargs.get('stages_parameter', 1.0))
+            
+            # Validation epoch
             val_loss, val_metrics = validating_epoch(
                 model, val_loader, self.criterion, val_metrics, self.kwargs["device"], epoch, metrics_per_stage = self.kwargs.get('metrics_per_stage', False), stages_parameter = self.kwargs.get('stages_parameter', 1.0))
+            
+            scheduler.step()
 
-            if scheduler is not None:
-                scheduler.step()
-
+            # Printing epoch evaluation metrics
             if epoch % self.eval_n == 0:
                 self._print_data(train_loss, val_loss, epoch, val_metrics)
                 if isinstance(model, VPSNet):
@@ -163,14 +138,7 @@ class Experiment:
                     writer(train_loss, val_loss, None, None,
                            epoch, train_metrics, val_metrics)
 
-            if (isinstance(model, VPSNet) or isinstance(model, VPSNetPost) or isinstance(model, VPSNetLearned)) and (epoch+1) % self.kwargs.get("stage_step", 2000) == 0 and model.n_iters < self.kwargs.get("stage_max", 10):
-                model.n_iters = model.n_iters + self.kwargs.get("stage_inc", 3)
-                print(f"Stages: {model.n_iters}")
-
             psnr = val_metrics["psnr"]
-
-            if val_loss > 1 and epoch >= 100:
-                pass
 
             if psnr >= best_psnr:
                 best_psnr = psnr

@@ -156,16 +156,15 @@ class MetricCalculator:
 
         self.len = dataset_len
         self.steps_dict = {'ergas': [], 'rmse': [], 'psnr': [], 'ssim': [], 'sam': []}
-        self.dict = {'ergas': 0, 'rmse': 0, 'psnr': 0, 'psnr_inter_pred':0, 'ssim': 0, 'sam': 0, 'psnr_inter_gt': 0, 'q-index': 0, 'scc': 0, 'd_s': 0, 'd_lmb': 0, "qnr": 0}
-        self.dict_s1 = {'ergas': 0, 'rmse': 0, 'psnr': 0, 'psnr_inter_pred':0, 'ssim': 0, 'sam': 0, 'psnr_inter_gt': 0, 'q-index': 0, 'scc': 0, 'd_s': 0, 'd_lmb': 0, "qnr": 0}
-        self.dict_s2 = {'ergas': 0, 'rmse': 0, 'psnr': 0, 'psnr_inter_pred':0, 'ssim': 0, 'sam': 0, 'psnr_inter_gt': 0, 'q-index': 0, 'scc': 0, 'd_s': 0, 'd_lmb': 0, "qnr": 0}
-        self.dict_std = {'ergas': 0, 'rmse': 0, 'psnr': 0, 'ssim': 0, 'sam': 0, 'q-index': 0, 'scc': 0, 'd_s': 0, 'd_lmb': 0, "qnr": 0}
+        self.dict = {'ergas': 0, 'rmse': 0, 'psnr': 0,  'ssim': 0, 'sam': 0}
+        self.dict_s1 = {'ergas': 0, 'rmse': 0, 'psnr': 0, 'psnr_inter_pred':0, 'ssim': 0, 'sam': 0}
+        self.dict_s2 = {'ergas': 0, 'rmse': 0, 'psnr': 0, 'psnr_inter_pred':0, 'ssim': 0, 'sam': 0}
+        self.dict_std = {'ergas': 0, 'rmse': 0, 'psnr': 0, 'ssim': 0, 'sam': 0}
         self.sampling_factor = sampling_factor
 
-    def update(self, pred, target, inter = None):
+    def update(self, pred, target):
 
         rmse = RMSE(pred, target).item()
-        q_index = Q_index(pred, target).item()
         psnr = PSNR(pred, target).item()
         ergas = ERGAS(pred, target, self.sampling_factor).item()
         ssim = SSIM(pred, target, data_range=1.).item()
@@ -176,7 +175,6 @@ class MetricCalculator:
 
         # Computation of the mean for every metric
         self.dict['sam'] += N * sam / self.len
-        self.dict['q-index'] += N * q_index / self.len
         self.dict['ergas'] += N * ergas / self.len
         self.dict['rmse'] += N * rmse / self.len
         self.dict['psnr'] += N * psnr / self.len
@@ -184,26 +182,18 @@ class MetricCalculator:
 
         # Computation of std for every metric
         self.dict_s1['sam'] += N * sam 
-        self.dict_s1['q-index'] += N * q_index 
         self.dict_s1['ergas'] += N * ergas 
         self.dict_s1['rmse'] += N * rmse 
         self.dict_s1['psnr'] += N * psnr 
         self.dict_s1['ssim'] += N * ssim
 
         self.dict_s2['sam'] += N * sam**2 
-        self.dict_s2['q-index'] += N * q_index**2 
         self.dict_s2['ergas'] += N * ergas**2
         self.dict_s2['rmse'] += N * rmse**2
         self.dict_s2['psnr'] += N * psnr**2
         self.dict_s2['ssim'] += N * ssim**2
 
         self.dict_std = {k: math.sqrt(self.len*self.dict_s2[k] - (self.dict_s1[k])**2)/self.len for k in self.dict_std.keys()}
-
-        if inter is not None:
-            psnr_inter_pred = PSNR(pred, inter).item()
-            psnr_inter_gt = PSNR(target, inter).item()
-            self.dict['psnr_inter_pred'] += N * psnr_inter_pred / self.len
-            self.dict['psnr_inter_gt'] += N * psnr_inter_gt / self.len
 
     def clean_steps_dict(self):
         self.steps_dict = {'ergas': [], 'rmse': [], 'psnr': [], 'ssim': [], 'sam': []}
