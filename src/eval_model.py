@@ -61,18 +61,24 @@ class ParseHP(argparse.Action):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fusion with unfolding")
-    parser.add_argument("--dataset", default="worldview", type=str, help="Dataset for evaluation", choices=dict_datasets.keys())
-    parser.add_argument("--stages", type=int, help="Nº of stages", default=10)
-    parser.add_argument("--resblocks", type=int, help="Nº of resblocks", default=1)
-    parser.add_argument("--upsampling_type", default="bicubic", type=str, help="Up/Downsampling function",  choices=dict_upsamplings.keys())
-    parser.add_argument("--model", default="VPSNet", type=str, help="Model to evaluate", choices=dict_model.keys())
-    parser.add_argument("--nickname", type=str, help="Name for the experiment")
-    parser.add_argument("--histogram", type=str, help="Histogram function",  choices=dict_histograms.keys())
-    parser.add_argument("--csv_name", default='./ours.csv', type=str, help="Name for the experiment")
+
+    # Dataset Options
+    parser.add_argument("--dataset", default="worldview", type=str, help="Dataset for training", choices=dict_datasets.keys())
+    parser.add_argument("--limit_dataset", type=int, help="Number of samples of the dataset to use")
     parser.add_argument("--sampling_factor", default=4, type=int, help="Downsampling factor")
+
+    # Model to execute
+    parser.add_argument("--model", default="VPSNet", type=str, help="Model to train", choices=dict_model.keys())
+
+    # Extras for the model
     parser.add_argument("--metrics_per_stage", action='store_true')
-    parser.add_argument("--model_path", type=str, help="Resume path", required=True)
-    parser.add_argument("--noise_std", type=float, help="Standard deviation for noise", default=None)
+    parser.add_argument("--csv_name", default='./ours.csv', type=str, help="Name for the experiment")
+
+    # Name of the experiment
+    parser.add_argument("--nickname", type=str, help="Name for the experiment")
+
+    # Resume training    
+    parser.add_argument("--model_path", type=str, help="Model path")
 
     # Loading cli arguments
     args = parser.parse_args()
