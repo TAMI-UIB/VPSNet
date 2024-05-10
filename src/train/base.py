@@ -10,6 +10,7 @@ from torch.nn.functional import fold, unfold
 from torch.optim.lr_scheduler import MultiStepLR, StepLR
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
 from torchinfo import summary
+from tqdm import tqdm
 import imageio.v3 as imageio
 
 from src.dataset import dict_datasets
@@ -17,7 +18,7 @@ from src.model import dict_model
 from src.model.vpsnet import VPSNet
 from src.model.vpsnet_post import VPSNetPost
 from src.model.vpsnet_learned import VPSNetLearned
-from src.utils import dict_optimizers, dict_losses, dict_upsamplings, dict_histograms, default_hp
+from src.utils import dict_optimizers, dict_losses, default_hp
 from src.train.epochs import training_epoch, validating_epoch
 from src.utils.losses import RadiometricPerStage
 from src.utils.metrics import MetricCalculator
@@ -30,7 +31,6 @@ class Experiment:
         self.dataset = dict_datasets[dataset]
 
         self.model = dict_model[model]
-
 
         self.loss_function = loss_function
 
@@ -56,7 +56,6 @@ class Experiment:
             torch.cuda.manual_seed_all(seed)
 
         np.random.seed(seed)
-
 
     def train(self):
         # training and validation data loaders
@@ -110,7 +109,6 @@ class Experiment:
         for epoch in range(start_epoch, self.epochs, 1):
 
             # Initializing metrics tracker
-            # TODO: Considerar el caso de limit dataset
             dataset_length_train = self.kwargs.get("limit_dataset", len(dataset_train))
             dataset_length_validation = math.ceil(self.kwargs.get("limit_dataset")/8) if self.kwargs.get("limit_dataset", None) is not None else len(dataset_val)
 
@@ -154,22 +152,17 @@ class Experiment:
 
     def eval(self, output_path):
         # Definition of metrics file name
-        csv_name = self.kwargs.get("csv_name", "./sota.csv")
+        csv_name = self.kwargs.get("csv_name", "./vpsnet.csv")
         csv_split = csv_name.split('.')
-        csv_std_name = f".{csv_split[-2]}_std.csv" # Este parche es un poco feo y probablemente no se adapte a todas las situaciones
+        csv_std_name = f".{csv_split[-2]}_std.csv" 
         
         # Creation of writers
         writer = FileWriter(self.kwargs, output_path, csv_file=csv_name)
         writer_std = FileWriter(self.kwargs, output_path, csv_file=csv_std_name)
 
-
-        self.kwargs['device'] = torch.device('cpu')
-
         print(self.kwargs['device'])
 
-        ckpt = torch.load(
-            self.kwargs["model_path"], map_location=torch.device('cpu'))
-        # model = self._init_model(self.dataset.get_n_channels())
+        ckpt = torch.load(self.kwargs["model_path"], map_location=torch.device('cpu'))
         model = ckpt["model"]
 
         try:
@@ -184,26 +177,13 @@ class Experiment:
         if not os.path.exists(img_path):
             os.makedirs(img_path)
 
-
-        if isinstance(model, MMNet_addapted):
-            state_dict = model.state_dict()
-            device_s = 'cpu'  # if torch.cuda.is_available() else 'cpu'
-            new_model = MMNet_addapted(
-                num_channels=dataset.get_n_channels(), sampling_factor=dataset.get_sampling_factor(), device=device_s)
-            new_model.load_state_dict(state_dict, strict=False)
-            model = new_model
-            model.to(self.kwargs["device"])
-            model.width, model.height = 256, 256
-        else:
-            model.to(self.kwargs['device'])
-        # model.n_iters = 30
+        model.to(self.kwargs['device'])
 
         dataset = self.dataset(self.kwargs["dataset_path"], 'test', noise_level = self.noise_std)
 
-        # model_summary = self.get_info_model(model, dataset, mode='eval')
+        self.get_info_model(model, dataset, mode='eval')
         total_parameters = sum(p.numel() for p in model.parameters())
 
-        images_to_save = dataset.IMAGES_TEST_IDX
         data_loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=self.kwargs["num_workers"], pin_memory=False)
 
         for param in model.parameters():
@@ -215,10 +195,6 @@ class Experiment:
             model.eval()
             with tqdm(enumerate(data_loader), total=len(data_loader), leave=False) as pbar:
                 for idx, batch in pbar:
-
-                    # steps = []
-                    # for i in range(self.kwargs.get('stages')):
-                    # model.n_iters = i+1
                     gt, ms, lms, pan = batch[0], batch[1], batch[2], batch[3]
                     gt = gt.to(self.kwargs["device"]).float()
                     ms = ms.to(self.kwargs["device"]).float()
@@ -234,80 +210,27 @@ class Experiment:
 
                     out = out.clamp(min=0, max=1)
 
-                    # steps.append(out)
-
                     metrics.update(out.cpu(), gt.cpu())
 
-                    # steps = [step.cpu() for step in steps]
-                    # metrics.update_stages(steps, gt.cpu())
-                    # figure = TensorboardWriter.plot_stages(metrics.steps_dict, model.n_iters)
-                    # figure.savefig(f"plot_{idx}.png")
-                    # metrics.clean_steps_dict()
+        csv_save_dict = dict(**metrics.dict, model=self.model_name, nickname=self.kwargs("nickname", "Evaluation"), parameters=total_parameters, noise_std=self.noise_std)
+        csv_std_dict = dict(**metrics.dict_std, nickname = self.kwargs.get('nickname', 'Evaluation'), parameters=total_parameters, model=self.model_name)
 
-                    if idx in images_to_save:
-                        # TODO: Repensar nomenclatura imagenes
-
-                        imageio.imwrite(f'{img_path}/{idx}_gt.png', (self.dataset.show_dataset_image(gt).squeeze(
-                        ).cpu().permute((1, 2, 0)).detach().numpy()*255).astype(np.uint8), extension='.png')
-
-                        imageio.imwrite(f'{img_path}/{idx}_{self.model_name}.png', (self.dataset.show_dataset_image((out.cpu()-out.cpu().min())/(
-                            out.cpu().max()-out.cpu().min())).squeeze().cpu().permute((1, 2, 0)).detach().numpy()*255).astype(np.uint8), extension='.png')
-                        
-                        imageio.imwrite(f'{img_path}/{idx}_pan.png', np.repeat((pan.squeeze(
-                            0).cpu().permute((1, 2, 0)).detach().numpy()*255).astype(np.uint8), 3, axis=-1))
-                        
-                        imageio.imwrite(f'{img_path}/{idx}_lms.png', (self.dataset.show_dataset_image(lms).squeeze(
-                        ).cpu().permute((1, 2, 0)).detach().numpy()*255).astype(np.uint8), extension='.png')
-
-                    # if self.kwargs.get("metrics_per_stage", False):
-                    #     metrics.update(out.cpu(), gt.cpu())
-                    #     stages = [step.cpu() for step in stages]
-                    #     metrics.update_stages(stages, gt.cpu())
-                    #     figure = TensorboardWriter.plot_stages(metrics.steps_dict, model.n_iters)
-                    #     figure.savefig(f"plot_{idx}.png")
-                    #     metrics.clean_steps_dict()
-                    # else:
-                    #     metrics.update(out.cpu(), gt.cpu())
-
-        csv_save_dict = dict(**metrics.dict, n_params=total_parameters, name=self.model_name, std=self.noise_std) if self.kwargs["nickname"] is None else dict(
-                **metrics.dict, model=self.model_name, nickname=self.kwargs["nickname"], std=self.noise_std)
-        csv_std_dict = dict(**metrics.dict_std, nickname = self.kwargs.get('nickname', 'Test'), model=self.model_name)
         writer.save_testing_csv(csv_save_dict, csv_name)
         writer_std.save_testing_csv(csv_std_dict, csv_std_name)
 
     def _save_model(self, model, version, epoch=None):
+
         try:
-            os.makedirs(self.kwargs["snapshot_path"] +
-                        f'/ckpt/{self.model_name}/{self.kwargs["nickname"]}_{self.loss_function}')
+            os.makedirs(self.kwargs["snapshot_path"] + f'/ckpt/{self.model_name}/{self.kwargs["nickname"]}_{self.loss_function}')
         except FileExistsError:
             pass
-        save_path = self.kwargs["snapshot_path"] + \
-            f'/ckpt/{self.model_name}/{self.kwargs["nickname"]}_{self.loss_function}/weights_{version}.pth'
+
+        save_path = self.kwargs["snapshot_path"] + f'/ckpt/{self.model_name}/{self.kwargs["nickname"]}_{self.loss_function}/weights_{version}.pth'
         ckpt = {'experiment': self, 'model': model, 'epoch': epoch}
         torch.save(ckpt, save_path)
 
     def _init_model(self, n_channels):
-
-        if self.model == dict_sota["GPPNN"]:
-            return self.model(
-                ms_channels=n_channels,
-                pan_channels=1,
-                n_feat=64,
-                n_layer=8
-            )
-
-        elif self.model == dict_sota["MMNet"]:
-            device_s = 'cuda' if torch.cuda.is_available() else 'cpu'
-            return self.model(num_channels=n_channels, device=device_s, sampling_factor = self.sampling_factor)
-
-        elif  self.model == dict_sota["LAGConv"] or  self.model == dict_sota["NLRNet"]:
-            return self.model(n_channels=n_channels)
-
-        elif self.model == dict_sota["MDCUN"] or self.model == dict_sota["S2DBPN"] or self.model == dict_sota["PanFormer"]:
-            return self.model(n_channels=n_channels, sampling_factor=self.sampling_factor)
-
-        else:
-            return self.model(
+        return self.model(
                 n_channels=n_channels,
                 sampling_factor=self.sampling_factor,
                 **self.kwargs
@@ -326,23 +249,6 @@ class Experiment:
             [f"{k} {v:.2f}" for k, v in metrics.items()])
         print(
             f"epoch {epoch}: trainloss {train_loss:.4f}, valloss {val_loss:.4f}, {metrics_message}")
-
-    @staticmethod
-    def _do_patches(data, ps):
-        data_shape = data.size
-        assert data_shape(2) % ps == 0 and data_shape(3) % ps == 0
-        patches = unfold(data, kernel_size=ps, stride=ps)
-        patch_num = patches.size(2)
-        patches = patches.permute(0, 2, 1).view(
-            data_shape(0), -1, data_shape(1), ps, ps)
-        return torch.reshape(patches, (data_shape(0) * patch_num, data_shape(1), ps, ps))
-
-    @staticmethod
-    def _undo_patches(data, n, w, h, ps):
-        patches = data.reshape(n, data.size(0), data.size(1), ps, ps)
-        patches = patches.view(n, data.size(
-            0), data.size(1) * ps * ps).permute(0, 2, 1)
-        return fold(patches, (w, h), kernel_size=ps, stride=ps)
 
     def load_from_dict(self, **ckpt):
         for k, v in ckpt.items():
