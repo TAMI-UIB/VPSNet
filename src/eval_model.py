@@ -16,8 +16,7 @@ sys.path.extend([os.environ.get('PROJECT_PATH')])
 from src.train.base import Experiment
 from src.dataset import dict_datasets
 from src.model import dict_model
-from src.utils import dict_upsamplings, dict_histograms
-
+from src.upsampling import dict_upsamplings
 
 torch.cuda.manual_seed_all(2024)
 np.random.seed(2024)

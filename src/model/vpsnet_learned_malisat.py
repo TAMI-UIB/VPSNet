@@ -15,8 +15,8 @@ import sys
 sys.path.extend([os.environ.get('PROJECT_PATH')])
 
 from src.postprocessing import dict_post
-from upsampling.bicubic import Downsamp_2_2, UpSamp_2_2, UpSamp_4_2, Downsamp_4_2, Upsampling, Downsampling
-from model.proxnet import ProxNet
+from src.upsampling.bicubic import Downsampling
+from src.model.proxnet import ProxNet
 
 
 class VPSNetLearnedMalisat(nn.Module):

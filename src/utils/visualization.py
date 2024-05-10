@@ -11,14 +11,10 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
-from model.vpsnet_learned_malisat import VPSNetLearnedMalisat
+
+from src.model.vpsnet_learned_malisat import VPSNetLearnedMalisat
 from src.model.vpsnet_learned_malisat_radiometric import VPSNetLearnedMalisatRadiometric
-from dataset.SEN2VENUS import SEN2VENUSDataset
 
-from src.dataset.worldview import WorldView3Dataset
-from dataset.pelican import PelicanDataset
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -149,57 +145,23 @@ class TensorboardWriter:
                 pred_v = self.model.forward(ms_v.to(self.device).float(), lms_v.to(self.device).float(), pan_v.to(self.device).float())
                 pred_t = self.model.forward(ms_t.to(self.device).float(), lms_t.to(self.device).float(), pan_t.to(self.device).float())
                 
-        if isinstance(self.train_loader.dataset, WorldView3Dataset):
-            gt_v = WorldView3Dataset.show_dataset_image(gt_v)
-            ms_v = WorldView3Dataset.show_dataset_image(ms_v)
-            lms_v = WorldView3Dataset.show_dataset_image(lms_v)
-
-            pred_v = WorldView3Dataset.show_dataset_image(pred_v)
-
-            gt_t = WorldView3Dataset.show_dataset_image(gt_t)
-            ms_t = WorldView3Dataset.show_dataset_image(ms_t)
-            lms_t = WorldView3Dataset.show_dataset_image(lms_t)
-
-            pred_t = WorldView3Dataset.show_dataset_image(pred_t)
-
-            return dict(
-                predictions_val=self._plot_batch(gt_v.to('cpu'), pred_v.to('cpu'), lms_v.to('cpu'), pan_v.to('cpu')),
-                predictions_train=self._plot_batch(gt_t.to('cpu'), pred_t.to('cpu'), lms_t.to('cpu'), pan_t.to('cpu')),
-            )
-
         
-        elif isinstance(self.train_loader.dataset, PelicanDataset):
-            gt_v = PelicanDataset.show_dataset_image(gt_v)
-            ms_v = PelicanDataset.show_dataset_image(ms_v)
-            lms_v = PelicanDataset.show_dataset_image(lms_v)
-            pred_v = PelicanDataset.show_dataset_image(pred_v)
+            gt_v = self.val_loader.dataset.show_dataset_image(gt_v)
+            ms_v = self.val_loader.dataset.show_dataset_image(ms_v)
+            lms_v = self.val_loader.dataset.show_dataset_image(lms_v)
 
-            gt_t = PelicanDataset.show_dataset_image(gt_t)
-            ms_t = PelicanDataset.show_dataset_image(ms_t)
-            lms_t = PelicanDataset.show_dataset_image(lms_t)
-            pred_t = PelicanDataset.show_dataset_image(pred_t)
+            pred_v = self.val_loader.dataset.show_dataset_image(pred_v)
 
-            return dict(
-                predictions_val=self._plot_batch(gt_v.to('cpu'), pred_v.to('cpu'), lms_v.to('cpu'), pan_v.to('cpu')),
-                predictions_train=self._plot_batch(gt_t.to('cpu'), pred_t.to('cpu'), lms_t.to('cpu'), pan_t.to('cpu')),
-            )
-        
-        elif isinstance(self.train_loader.dataset, SEN2VENUSDataset):
-            gt_v = SEN2VENUSDataset.show_dataset_image(gt_v)
-            ms_v = SEN2VENUSDataset.show_dataset_image(ms_v)
-            lms_v = SEN2VENUSDataset.show_dataset_image(lms_v)
-            pred_v = SEN2VENUSDataset.show_dataset_image(pred_v)
+            gt_t = self.train_loader.dataset.show_dataset_image(gt_t)
+            ms_t = self.train_loader.dataset.show_dataset_image(ms_t)
+            lms_t = self.train_loader.dataset.show_dataset_image(lms_t)
 
-            gt_t = SEN2VENUSDataset.show_dataset_image(gt_t)
-            ms_t = SEN2VENUSDataset.show_dataset_image(ms_t)
-            lms_t = SEN2VENUSDataset.show_dataset_image(lms_t)
-            pred_t = SEN2VENUSDataset.show_dataset_image(pred_t)
+            pred_t = self.train_loader.dataset.show_dataset_image(pred_t)
 
             return dict(
                 predictions_val=self._plot_batch(gt_v.to('cpu'), pred_v.to('cpu'), lms_v.to('cpu'), pan_v.to('cpu')),
-                predictions_train=self._plot_batch(gt_t.to('cpu'), pred_t.to('cpu'), lms_t.to('cpu'), pan_t.to('cpu')),
+                predictions_train=self._plot_batch(gt_t.to('cpu'), pred_t.to('cpu'), lms_t.to('cpu'), pan_t.to('cpu'))
             )
-
 
     def _plot_batch(self, gt: Tensor, pred: Tensor | Tuple, lms: Tensor, pan: Tensor):
         # xout = xout.detach().cpu().numpy()
@@ -287,7 +249,7 @@ class FileWriter:
             w = csv.DictWriter(f, test_results.keys())
 
             if not already_exists or self.csv_file is None:
-                w.writeheader()  # Write the header only if the file doesn't exist or if self.csv_file is None
+                w.writeheader() 
 
             w.writerow(test_results)
     
