@@ -17,7 +17,8 @@ from src.train.base import Experiment
 from src.dataset import dict_datasets
 from src.postprocessing import dict_post
 from src.model import dict_model
-from src.utils import dict_losses, dict_upsamplings, dict_histograms
+from src.utils import dict_losses
+from src.upsampling import dict_upsamplings
 from src.utils import default_hp
 
 torch.manual_seed(2024)
@@ -68,25 +69,15 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", default="worldview", type=str, help="Dataset for training", choices=dict_datasets.keys())
     parser.add_argument("--limit_dataset", type=int, help="Number of samples of the dataset to use")
     parser.add_argument("--sampling_factor", default=4, type=int, help="Downsampling factor")
-    parser.add_argument("--noise_std", type=float, help="Standard deviation for noise", default=None)
 
     # Model to execute
     parser.add_argument("--model", default="VPSNet", type=str, help="Model to train", choices=dict_model.keys())
 
     # Extras for the model
-    parser.add_argument("--resblocks", type=int, help="Nº of resblocks", default=1)
-    parser.add_argument("--spectral_blocks", type=int, help="Nº of spectral blocks", default=1)
     parser.add_argument("--memory_size", type=int, help="Nº of channels for memory", default=4)
     parser.add_argument("--upsampling_type", default="bicubic", type=str, help="Up/Downsampling function",  choices=dict_upsamplings.keys())
     parser.add_argument("--postprocessing_type", type=str, default=None, help="Postprocessing applied in VPSNetPost",  choices=dict_post.keys())
-    parser.add_argument("--use_features", action='store_true')
     parser.add_argument("--metrics_per_stage", action='store_true')
-    
-    # Stages options
-    parser.add_argument("--stages", type=int, help="Nº of stages", default=10)
-    parser.add_argument("--stage_step", type=int, help="Nº of stages", default=2000)
-    parser.add_argument("--stage_max", type=int, help="Nº of stages", default=10)
-    parser.add_argument("--stage_inc", type=int, help="Nº of stages", default=3)
     
     # Training parameters
     parser.add_argument("--optimizer", default="Adam", type=str, help="Optimizer")
@@ -110,6 +101,8 @@ if __name__ == "__main__":
 
     # Loading environment arguments
     dict_env = dict(os.environ)
+
+    # TODO: Arreglar esto para que no quede tan chapuza
     dict_env = parse_params({k.lower(): v for k, v in dict_env.items()})
     del dict_env["epochs"]
     del dict_env["batch_size"]
@@ -117,7 +110,6 @@ if __name__ == "__main__":
     args_experiment = {**args_dict, **dict_env}
     args_experiment["log_path"] = get_log_path(args_experiment)
     args_experiment["snapsot_path"] = get_log_path(args_experiment)
-    args_experiment["scheduler"] =  "halved_500"
     
     experiment = Experiment(**args_experiment)
     experiment.train()
